@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>VR Object Detector with Voice 🎯</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+  <style>
+    body {
+      background: #000;
+      color: white;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      overflow: hidden;
+    }
+    #container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      gap: 0;
+    }
+    video, canvas {
+      display: block;
+      width: 50vw;
+      height: 100vh;
+      object-fit: cover;
+    }
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.6);
+      padding: 10px 20px;
+      border-radius: 8px;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="ui">
+    <h2>VR Object Detector with Voice</h2>
+    <button id="detectBtn">🔍 Detect Objects</button>
+  </div>
+
+  <div id="container">
+    <canvas id="leftEye"></canvas>
+    <canvas id="rightEye"></canvas>
+  </div>
+
+  <script>
+    const leftCanvas = document.getElementById('leftEye');
+    const rightCanvas = document.getElementById('rightEye');
+    const ctxL = leftCanvas.getContext('2d');
+    const ctxR = rightCanvas.getContext('2d');
+    const detectBtn = document.getElementById('detectBtn');
+
+    let videoStream, video, model;
+
+    async function initCamera() {
+      video = document.createElement('video');
+      video.setAttribute('autoplay', '');
+      video.setAttribute('playsinline', '');
+      video.setAttribute('muted', '');
+      video.style.display = 'none';
+      document.body.appendChild(video);
+
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      video.srcObject = stream;
+      videoStream = stream;
+      console.log("Camera ready");
+    }
+
+    async function loadModel() {
+      model = await cocoSsd.load();
+      console.log("Model loaded!");
+    }
+
+    function speak(text) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      speechSynthesis.speak(utterance);
+    }
+
+    async function detectObjects() {
+      if (!model || !video.videoWidth) return;
+
+      // Set canvas size dynamically
+      [leftCanvas, rightCanvas].forEach(c => {
+        c.width = video.videoWidth;
+        c.height = video.videoHeight;
+      });
+
+      ctxL.drawImage(video, 0, 0, leftCanvas.width, leftCanvas.height);
+      ctxR.drawImage(video, 0, 0, rightCanvas.width, rightCanvas.height);
+
+      const predictions = await model.detect(leftCanvas);
+      drawPredictions(ctxL, predictions);
+      drawPredictions(ctxR, predictions);
+    }
+
+    function drawPredictions(ctx, predictions) {
+      let spokenText = "";
+
+      predictions.forEach(pred => {
+        const [x, y, w, h] = pred.bbox;
+        const label = `${pred.class} (${(pred.score * 100).toFixed(1)}%)`;
+
+        ctx.strokeStyle = "#00FF00";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, w, h);
+        ctx.font = "20px Arial";
+        ctx.fillStyle = "#00FF00";
+        ctx.fillText(label, x, y > 20 ? y - 5 : 20);
+
+        spokenText += `${pred.class}, `;
+      });
+
+      if (spokenText) speak("Detected " + spokenText);
+    }
+
+    async function loop() {
+      await detectObjects();
+      requestAnimationFrame(loop);
+    }
+
+    detectBtn.addEventListener("click", () => {
+      loop();
+      detectBtn.style.display = "none";
+    });
+
+    // Initialize
+    initCamera();
+    loadModel();
+  </script>
+
+</body>
+</html>
